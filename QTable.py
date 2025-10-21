@@ -20,69 +20,69 @@ class EpsGreedyPolicy:
    def __init__(self,Qtable):
       self.Q=Qtable
       self.n_actions=len(Qtable[0])
-   def __call__(self, obs,eps):
-      greedy= random.random() > eps
-      if greedy:
-         return np.argmax(self.Q[obs])
+   def __call__(self, obs,eps):                       
+      greedy= random.random() > eps             
+      if greedy:                                            
+         return np.argmax(self.Q[obs])                      #scegli l'azione che massimizza la ricompensa per lo stato osservato
       else:
-         return random.randint(0,self.n_actions-1)
+         return random.randint(0,self.n_actions-1)          #scegli un'azione casuale da quelle disponibili
       
 def qlearn(env:gym.Env,
-          alpha:float,
-          gamma:float,
+          alpha:float,                              #learning rate
+          gamma:float,                              #discount factor
           episodes:int,
-          steps:int):
-    Q=np.zeros([env.observation_space.n,env.action_space.n,])
-    Rewards=np.zeros(episodes)
-    eps=0.9
-    policy=EpsGreedyPolicy(Q)
+          steps:int):                               #numero massimo di azioni da compiere per episodio
+    Q=np.zeros([env.observation_space.n,env.action_space.n,])   #inizializza la Qtable creandola come un dizionario vuoto
+    Rewards=np.zeros(episodes)                                  #inizializza la lista delle ricompense totali degli episodi
+    eps=0.9                                                     #probabilità di scegliere una RandomPolicy(esplorazione) invece che di una GreedyPolicy(massimizare la ricompensa)
+    policy=EpsGreedyPolicy(Q)                                   #la policy viene definita come una classe che prende in input la qtable
     for i in range(episodes):
-     state,info=env.reset()
-     for j in range(steps):
-       action=policy(state,eps)
-       obs,rew,done,truncated,info=env.step(action)
-       Rewards[i]+=rew
-       Q[state][action]+= alpha*(rew+ gamma*np.max(Q[obs])-Q[state][action])
-       if(done or truncated):
+     state,info=env.reset()                                    #all'inizio dell'episodio riavvia l'ambiente e ottieni lo stato
+     for j in range(steps):                                    
+       action=policy(state,eps)                                #scelgli l'azione per lo stato corrente in base alla policy               
+       obs,rew,done,truncated,info=env.step(action)            #esegui l'azione sull'ambiente , ottieni il nuovo stato osservato e le ricompensa 
+       Rewards[i]+=rew                                         #aggiungi la ricompensa alle altre ricompense dell'episodio    
+       Q[state][action]+= alpha*(rew+ gamma*np.max(Q[obs])-Q[state][action])         #aggiungi l' ricompensa alla Qtable usando la Q funcrion
+       if(done or truncated):                                 # se l'agente ha raggiunto uno stato obbiettivo o qualcosa è andato storto finisci l'episodio
           break
-       state=obs
-     eps = max(0.1, eps * 0.9)
+       state=obs                                              #continua l'episodio sul nuovo stadio osservato
+     eps = max(0.1, eps * 0.9)                                #alla fine di ogni episodio decrementa il valore del parametra il prametro in modo da favorire di più la GreedyPolicy
 
     return Q,Rewards
 def rolllouts(env:gym.Env,
-              policy,
-              gamma:float,
+              policy,                            #policy scelta
+              gamma:float,                       #discount factor
               episodes:int,
-              Render=False)-> float:
+              Render=False)-> float:             #flag per indicare se visualizzare l'ambiente o meno
    sum=0.0
-   state,info=env.reset()
+   state,info=env.reset()                       
    discount=1
-   if Render :
+   if Render :                                   
       env.render()
    for e in range(episodes):
-      print("New Episode")
-      state,info=env.reset()
-      discount=1
-      done=False
-      while not done:
-         action=policy(state)
-         obs,rew,terminated,truncated,info=env.step(action)
-         sum+=rew*discount
-         discount*=gamma
-         state=obs
-         done=terminated or truncated
-         if Render:
+      print("New Episode")                       #riavvia l'ambiente all'inizio di ogni episodio
+      state,info=env.reset()                    
+      discount=1                                 #all'inizio dell'episodio lo sconto è nullo
+      done=False 
+      while not done:                            # Finche l'agente non ha raggiunto uno stato obbiettivo o qualcosa va  storto continua l'episodio
+         action=policy(state)                    #scelgi l'azione secondo la policy
+         obs,rew,terminated,truncated,info=env.step(action)    #esegui l'azione sull'ambiente , ottieni il nuovo stato osservato e le ricompensa 
+         sum+=rew*discount                                     #somma la ricompensa scontata
+         discount*=gamma                                       #aumenta lo sconto
+         state=obs                                             #continua l'episodio sul nuovo stadio osservato                        
+         done=terminated or truncated                          
+         if Render:                  
           print(env.render())   
    return sum/episodes
    
-   
-taxi_env= gym.make("Taxi-v3",render_mode="ansi")
-qtable,Rewards=qlearn(taxi_env,0.1,0.95,40000,50)
-for o in range(taxi_env.observation_space.n):
-   print(o,":",np.argmax(qtable[o]))
-x=np.array(Rewards)
-
-plt.plot(x)
+  
+taxi_env= gym.make("Taxi-v3",render_mode="ansi")     #inizializa l'ambiente
+qtable,Rewards=qlearn(taxi_env,0.1,0.95,40000,50)    #La Qtable viene definita, e le ricompense ottenute ad ogni episodio vengono tracciate
+for o in range(taxi_env.observation_space.n):        #Dopo il learning vengono mostrate le azioni migiore per ogni stato
+   print(o,":",np.argmax(qtable[o]))                 
+x=np.array(Rewards)                                  #Grafico delle rimcompense totali ottenute ad ogni episodio 
+plt.plot(x)                                           
 plt.show()
-ret=rolllouts(taxi_env,policy=GreedyPolicy(qtable),gamma=0.95,episodes=20,Render=True)
+ret=rolllouts(taxi_env,policy=GreedyPolicy(qtable),gamma=0.95,episodes=20,Render=True) #metti alla prova la Qtable con un policy(in questo caso un GreedyPolicy) per ottenere la somma media delle ricompense
+
 print("Res:",ret)  
