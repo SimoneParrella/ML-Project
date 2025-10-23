@@ -26,7 +26,17 @@ class EpsGreedyPolicy:
          return np.argmax(self.Q[obs])                      #scegli l'azione che massimizza la ricompensa per lo stato osservato
       else:
          return random.randint(0,self.n_actions-1)          #scegli un'azione casuale da quelle disponibili
-      
+         
+def plot_results(rewards:np.ndarray):
+   plt.plot(rewards)
+   plt.ylabel("Rewards")
+   plt.xlabel("Episode")
+   plt.show()
+   
+def show_best_actions(env:gym.Env,Qtable):
+      for o in range(env.observation_space.n):
+       print(o,":",np.argmax(Qtable[o]))
+         
 def qlearn(env:gym.Env,
           alpha:float,                              #learning rate
           gamma:float,                              #discount factor
@@ -75,14 +85,18 @@ def rolllouts(env:gym.Env,
           print(env.render())   
    return sum/episodes
    
-  
-taxi_env= gym.make("Taxi-v3",render_mode="ansi")     #inizializa l'ambiente
-qtable,Rewards=qlearn(taxi_env,0.1,0.95,40000,50)    #La Qtable viene definita, e le ricompense ottenute ad ogni episodio vengono tracciate
-for o in range(taxi_env.observation_space.n):        #Dopo il learning vengono mostrate le azioni migiore per ogni stato
-   print(o,":",np.argmax(qtable[o]))                 
-x=np.array(Rewards)                                  #Grafico delle rimcompense totali ottenute ad ogni episodio 
-plt.plot(x)                                           
-plt.show()
-ret=rolllouts(taxi_env,policy=GreedyPolicy(qtable),gamma=0.95,episodes=20,Render=True) #metti alla prova la Qtable con un policy(in questo caso un GreedyPolicy) per ottenere la somma media delle ricompense
+if __name__=="__main__":   
+ taxi_env= gym.make("Taxi-v3",render_mode="ansi")       #inizializa l'ambiente
+ alpha=0.1                                              #learning rate
+ gamma=0.95                                             #sconto
+   
+ qtable,Rewards=qlearn(taxi_env,alpha,gamma,5000,100)   #La Qtable viene definita, e le ricompense ottenute ad ogni episodio vengono tracciate
+   
+ show_best_actions(taxi_env,qtable)                     #Dopo il learning vengono mostrate le azioni migiore per ogni stato
 
-print("Res:",ret)  
+ plot_results(Rewards)                                  #Grafico delle rimcompense totali ottenute ad ogni episodio 
+                                                       
+ ret=rolllouts(taxi_env,policy=GreedyPolicy(qtable),gamma=gamma,episodes=20,Render=True)  #metti alla prova la Qtable con un policy(in questo caso un GreedyPolicy) per ottenere la somma media delle ricompense
+ print("Res:",ret) 
+   
+ 
