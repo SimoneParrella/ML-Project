@@ -4,14 +4,29 @@ import random
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-actions={
+from dataclasses import dataclass
+@dataclass
+class DQNConfig:
+    env_id: str = "Taxi-v3"                                          
+    episodes: int = 10000                  
+    max_steps: int = 200                   
+    #RL
+    gamma: float = 0.99                    
+    #esplorazione ε-greedy (per-episodio)
+    eps_start: float = 1.0                 
+    eps_end: float = 0.05                   
+    eps_decay: float = 0.995                # decadimento moltiplicativo per episodio
+    #ottimizzazione
+    alpha: float = 0.9                      # learning rate Adam
+    log_every: int = 500  
+    actions={
    0:"South",
    1:"North",
    2:"East",
    3:"West",
    4:"Pickup",
    5:"Dropoff"
-}
+  }
 class RandomPolicy:
    def __init__(self,Qtable):
       self.n_actions=len(Qtable[0])
@@ -34,86 +49,125 @@ class EpsGreedyPolicy:
          return np.argmax(self.Q[obs])
       else:
          return random.randint(0,self.n_actions-1)
-      
-def plot_results(rewards:np.ndarray):
-   plt.plot(rewards)
-   plt.ylabel("Rewards")
-   plt.xlabel("Episode")
-   plt.show()
+def moving_avg(x, w):
+    x = np.asarray(x, dtype=np.float32)
+    if len(x) < w: 
+        return np.array([])
+    kernel = np.ones(w, dtype=np.float32) / float(w)
+    return np.convolve(x, kernel, mode="valid")     
+def plot_results(rewards:np.ndarray,sucsses_rate,window=500):
+    ma = moving_avg(rewards, window)
+    plt.figure(); plt.plot(rewards, alpha=0.4, label="Return/ep")
+    if len(ma) > 0:
+        plt.plot(range(window-1, window-1+len(ma)), ma, label=f"MA({window})")
+    plt.xlabel("Episode"); plt.ylabel("Return"); plt.title("Learning curve (returns)"); plt.legend(); plt.grid(True)
+    
+    succ_curve = moving_avg(np.array(succ_log, dtype=np.float32), window) * 100.0
+    if len(succ_curve) > 0:
+        plt.figure()
+        plt.plot(range(window-1, window-1+len(succ_curve)), succ_curve)
+        plt.xlabel("Episode"); plt.ylabel("Success rate [%]")
+        plt.title(f"Success rate (MA {window})"); plt.grid(True)
+    plt.show()
+
    
-def show_best_actions(env:gym.Env,Qtable):
+def show_Qtable(env:gym.Env,Qtable):
       for o in range(env.observation_space.n):
-       action=actions[np.argmax(Qtable[o])]
+       action=cfg.actions[np.argmax(Qtable[o])]
        print("State:",o,", Action:",action,", Q value:",Qtable[o][np.argmax(Qtable[o])])
       
-def qlearn(env:gym.Env,
-          alpha:float,
-          gamma:float,
-          episodes:int,
-          steps:int,
-          epsilon:float):
+def qlearn(cfg :DQNConfig):
     
-    Q=np.zeros([env.observation_space.n,env.action_space.n,])
-    Rewards=np.zeros(episodes)
-    eps=0.9
+    #Ambiente & dimensioni
+    env = gym.make(cfg.env_id, render_mode="ansi")
+    nS = env.observation_space.n
+    nA = env.action_space.n
+    #Creazione Qtable
+    Q=np.zeros([nS,nA,])
     policy=EpsGreedyPolicy(Q)
-    first=True
-    for i in range(episodes):  
+    #Schedules & logging
+    eps = cfg.eps_start
+    ep_returns=np.zeros(cfg.episodes) 
+    succ_log=[]                       # 1 se episodio chiuso con +20, altrimenti 0
+
+    for i in range(cfg.episodes):  
      state,info=env.reset()
+     ep_succeeded = False
      #print("New episode")
      #print(env.render())
-     for j in range(steps):
+     for j in range(cfg.max_steps):
+       # 1) selezione azione ε-greedy
        action=policy(state,eps)
-       prev=env.render()
-       obs,rew,done,truncated,info=env.step(action)
-       Rewards[i]+=rew
-       Q[state][action]+= alpha*(rew+ gamma*np.max(Q[obs])-Q[state][action])  
-       if(done or truncated):
-        break
-       state=obs
-       #print(env.render())
-     eps =max(0.05, eps * 0.995)
+
+       # 2) step ambiente
+       ns,r,terminated,truncated,info=env.step(action)
+       done=terminated or truncated
+       ep_returns[i]+=r                       #memorizza ricompensa
+
+       # 3) memorizza valore nella Q-table
+       Q[state][action]+= cfg.alpha*(r+ cfg.gamma*np.max(Q[ns])-Q[state][action])  
+       # 4) termina episodio
+      
+       if(done):
+            if r == 20:
+             ep_succeeded = True
+            break
+       
+       state=ns
+    # 4) logging ogni 100 episodi
+     eps = max(cfg.eps_end, eps * cfg.eps_decay)           # decay per-episodio
+     succ_log.append(1 if ep_succeeded else 0)
+
      if (i + 1) % 100 == 0:
-            avg100 = Rewards[max(0, i - 99):i + 1].mean()
+            avg100 = ep_returns[max(0, i - 99):i + 1].mean()
             print(f"[train][ep={i+1:5d}] avg_return(last100)={avg100:7.2f} eps={eps:6.3f}")
-    return Q,Rewards
-def rolllouts(env:gym.Env,
+    return Q,ep_returns,succ_log
+def evaluate_greedy(
+              env_id,
               policy,
               gamma:float,
               episodes:int,
               Render=False)-> float:
+   env= gym.make(env_id,render_mode="ansi")
    sum=0.0
+   succ=0.0
    state,info=env.reset()
+
    for e in range(episodes):
-      print("New Episode")
-      print(env.render)
+      #print("New Episode")
+      #print(env.render)
       state,info=env.reset()
       discount=1
       done=False
-
       while not done:
          action=policy(state)
-         obs,rew,terminated,truncated,info=env.step(action)
-         sum+=rew*discount
+         obs,r,terminated,truncated,info=env.step(action)
+         sum+=r*discount
          discount*=gamma
          state=obs
          done=terminated or truncated
-         if Render:
-          print(env.render())   
+         if(done):
+          if r == 20:
+             succ+=1
+          break
+         #if Render:
+          #print(env.render())   
 
-   return sum/episodes
+   env.close()
+   
+   return sum/episodes,succ/episodes
    
 if __name__=="__main__":   
- taxi_env= gym.make("Taxi-v3",render_mode="ansi")
- alpha=0.9
- gamma=0.97
- epsilon=0.9
- epsisodes=10000
- steps=100
+ cfg = DQNConfig()
+ Qtable,ep_returns,succ_log=qlearn(cfg)
+
+ policy=GreedyPolicy(Qtable)           #policy ottimale
+ #show_Qtable(taxi_env,Qtable)         #Stampa della Qtable
+
+ #roullout
+ returns,succs=evaluate_greedy(env_id=cfg.env_id,policy=policy,gamma=cfg.gamma,episodes=100,Render=False)
  
- Qtable,Rewards=qlearn(taxi_env,alpha,gamma,epsisodes,steps,epsilon)
- show_best_actions(taxi_env,Qtable)
- plot_results(Rewards)
- ret=rolllouts(taxi_env,policy=GreedyPolicy(Qtable),gamma=gamma,episodes=100,Render=False)
- print("Res:",ret)  
+ #grafici
+ plot_results(ep_returns,succ_log,window=500)
+ print("Eval (greedy):","mean return:",returns,",success rate:",succs) 
  
