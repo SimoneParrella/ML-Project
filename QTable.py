@@ -25,13 +25,8 @@ class DQNConfig:
    4:"Pickup",
    5:"Dropoff"
   }
-class RandomPolicy:
-   def __init__(self,Qtable):
-      self.n_actions=len(Qtable[0])
-   def __call__(self, obs):
-         return random.randint(0,self.n_actions-1)
 
-class GreedyPolicy:
+class OptimalPolicy:
    def __init__(self,Qtable):
       self.Q=Qtable
    def __call__(self, obs):
@@ -159,7 +154,7 @@ if __name__=="__main__":
  cfg = DQNConfig()
  Qtable,ep_returns,succ_log=qlearn(cfg)
 
- policy=GreedyPolicy(Qtable)           #policy ottimale
+ policy=OptimalPolicy(Qtable)           #policy ottimale
  #show_Qtable(taxi_env,Qtable)         #Stampa della Qtable
 
  #roullout
@@ -169,4 +164,5 @@ if __name__=="__main__":
  plot_results(ep_returns,succ_log,window=500)
  print("Eval (greedy):","mean return:",returns,",success rate:",succs) 
  
+
 
