@@ -10,16 +10,14 @@ class DQNConfig:
     env_id: str = "Taxi-v3"                                          
     episodes: int = 10000                  
     max_steps: int = 200                   
-    #RL
     gamma: float = 0.99                    
     #esplorazione ε-greedy (per-episodio)
     eps_start: float = 1.0                 
     eps_end: float = 0.05                   
     eps_decay: float = 0.995                # decadimento moltiplicativo per episodio
-    #ottimizzazione
-    alpha: float = 0.9                      # learning rate Adam
-    log_every: int = 500  
-    actions={
+    
+    alpha: float = 0.9                      # learning rate 
+    actions={                               #descrizione azioni
    0:"South",
    1:"North",
    2:"East",
@@ -171,3 +169,4 @@ if __name__=="__main__":
  plot_results(ep_returns,succ_log,window=500)
  print("Eval (greedy):","mean return:",returns,",success rate:",succs) 
  
+
